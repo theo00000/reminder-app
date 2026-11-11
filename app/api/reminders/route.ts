@@ -13,7 +13,6 @@ type ReminderRow = {
     updatedAt: string;
 };
 
-// GET semua reminder
 export async function GET() {
     try {
         const rows = db.prepare(`

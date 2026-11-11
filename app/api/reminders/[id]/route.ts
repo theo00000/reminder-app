@@ -2,8 +2,6 @@
 import { NextResponse } from "next/server";
 import { db } from "../../../config/database";
 
-export const runtime = "nodejs";
-
 type ReminderRow = {
     id: number;
     title: string;
