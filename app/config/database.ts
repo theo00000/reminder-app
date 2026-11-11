@@ -1,6 +1,7 @@
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
+
+import Database from "better-sqlite3";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 
 const globalForDb = globalThis as unknown as {
     reminderDb?: Database.Database;
@@ -11,24 +12,36 @@ function initializeDatabase(): Database.Database {
 
     mkdirSync(dataDir, { recursive: true });
 
-    const db = new Database(
-        path.join(dataDir, "reminders.sqlite")
+    // Database baru, database lama tetap aman
+    const dbPath = path.join(
+        dataDir,
+        "reminders-v2.sqlite"
     );
+
+    const db = new Database(dbPath);
 
     db.pragma("journal_mode = WAL");
     db.pragma("busy_timeout = 5000");
+    db.pragma("foreign_keys = ON");
 
     db.exec(`
-        CREATE TABLE IF NOT EXISTS reminders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            dueDate TEXT NOT NULL,
-            isCompleted INTEGER NOT NULL DEFAULT 0,
-            notificationSent INTEGER NOT NULL DEFAULT 0
-        );
+    CREATE TABLE IF NOT EXISTS reminders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      due_at TEXT NOT NULL,
+      is_completed INTEGER NOT NULL DEFAULT 0,
+      notified_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
-    `);
+    CREATE INDEX IF NOT EXISTS idx_reminders_due
+    ON reminders(due_at);
+  `);
+
+    console.log("SQLite initialized:", dbPath);
+
     return db;
 }
 
