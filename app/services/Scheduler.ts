@@ -1,11 +1,7 @@
 
-import { db } from "../config/database";
+import { getDb } from "../config/database";
 import type { Reminder } from "../models/Reminder";
 import { NotificationEngine } from "./NotificationEngine";
-
-type ReminderRow = Omit<Reminder, "isCompleted"> & {
-    isCompleted: number;
-};
 
 export class ReminderScheduler {
     private checkInterval: ReturnType<typeof setInterval> | null = null;
@@ -27,48 +23,72 @@ export class ReminderScheduler {
         this.isChecking = true;
 
         try {
+            // Inisialisasi koneksi Turso
+            const db = getDb();
             const now = new Date().toISOString();
 
-            const rows = db.prepare(`
-        SELECT
-          id,
-          title,
-          description,
-          due_at AS dueAt,
-          is_completed AS isCompleted,
-          notified_at AS notifiedAt,
-          created_at AS createdAt,
-          updated_at AS updatedAt
-        FROM reminders
-        WHERE is_completed = 0
-          AND notified_at IS NULL
-          AND due_at <= ?
-        ORDER BY due_at ASC
-      `).all(now) as ReminderRow[];
+            // Ambil reminder yang sudah jatuh tempo
+            const result = await db.execute({
+                sql: `
+          SELECT
+            id,
+            title,
+            description,
+            due_at AS dueAt,
+            is_completed AS isCompleted,
+            notified_at AS notifiedAt,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM reminders
+          WHERE is_completed = 0
+            AND notified_at IS NULL
+            AND due_at <= ?
+          ORDER BY due_at ASC
+        `,
+                args: [now],
+            });
 
-            for (const row of rows) {
-                const reminder: Reminder = {
-                    ...row,
-                    isCompleted: row.isCompleted === 1,
-                };
+            // Mapping data Turso ke model Reminder
+            const reminders: Reminder[] = result.rows.map((row) => ({
+                id: Number(row.id),
+                title: String(row.title),
+                description:
+                    row.description == null
+                        ? null
+                        : String(row.description),
+                dueAt: String(row.dueAt),
+                isCompleted: Number(row.isCompleted) === 1,
+                notifiedAt:
+                    row.notifiedAt == null
+                        ? null
+                        : String(row.notifiedAt),
+                createdAt: String(row.createdAt),
+                updatedAt: String(row.updatedAt),
+            }));
 
+            // Proses reminder yang jatuh tempo
+            for (const reminder of reminders) {
                 try {
                     await NotificationEngine.triggerAlert(reminder);
 
                     const notifiedAt = new Date().toISOString();
 
-                    db.prepare(`
-            UPDATE reminders
-            SET notified_at = ?,
+                    await db.execute({
+                        sql: `
+              UPDATE reminders
+              SET
+                notified_at = ?,
                 updated_at = ?
-            WHERE id = ?
-              AND notified_at IS NULL
-              AND is_completed = 0
-          `).run(
-                        notifiedAt,
-                        notifiedAt,
-                        reminder.id
-                    );
+              WHERE id = ?
+                AND notified_at IS NULL
+                AND is_completed = 0
+            `,
+                        args: [
+                            notifiedAt,
+                            notifiedAt,
+                            reminder.id,
+                        ],
+                    });
                 } catch (error) {
                     console.error(
                         `Notification failed for reminder ${reminder.id}:`,

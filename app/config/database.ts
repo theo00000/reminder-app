@@ -1,53 +1,24 @@
 
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import { createClient, type Client } from "@libsql/client/web";
 
-const globalForDb = globalThis as unknown as {
-    reminderDb?: Database.Database;
-};
+let client: Client | null = null;
 
-function initializeDatabase(): Database.Database {
-    const dataDir = path.join(process.cwd(), "data");
+export function getDb(): Client {
+    if (client) return client;
 
-    mkdirSync(dataDir, { recursive: true });
+    const url = process.env.TURSO_DATABASE_URL;
+    const authToken = process.env.TURSO_AUTH_TOKEN;
 
-    // Database baru, database lama tetap aman
-    const dbPath = path.join(
-        dataDir,
-        "reminders-v2.sqlite"
-    );
+    if (!url || !authToken) {
+        throw new Error(
+            "TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum dikonfigurasi"
+        );
+    }
 
-    const db = new Database(dbPath);
+    client = createClient({
+        url,
+        authToken,
+    });
 
-    db.pragma("journal_mode = WAL");
-    db.pragma("busy_timeout = 5000");
-    db.pragma("foreign_keys = ON");
-
-    db.exec(`
-    CREATE TABLE IF NOT EXISTS reminders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT,
-      due_at TEXT NOT NULL,
-      is_completed INTEGER NOT NULL DEFAULT 0,
-      notified_at TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_reminders_due
-    ON reminders(due_at);
-  `);
-
-    console.log("SQLite initialized:", dbPath);
-
-    return db;
-}
-
-export const db =
-    globalForDb.reminderDb ?? initializeDatabase();
-
-if (process.env.NODE_ENV !== "production") {
-    globalForDb.reminderDb = db;
+    return client;
 }
