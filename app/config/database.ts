@@ -1,4 +1,4 @@
-
+import "server-only";
 import { createClient, type Client } from "@libsql/client/web";
 
 let client: Client | null = null;
@@ -11,7 +11,7 @@ export function getDb(): Client {
 
     if (!url || !authToken) {
         throw new Error(
-            "TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum dikonfigurasi"
+            "Turso database credentials are missing"
         );
     }
 
