@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Reminder App - Project Documentation
 
-## Getting Started
+**Status:** implementasi awal (Create + Read), dengan rancangan CRUD lanjutan dan notifikasi terjadwal.
+**Stack:** Next.js 16 (App Router), React, TypeScript, Tailwind CSS, Turso/libSQL, Vercel.
+**Sumber dokumentasi:** struktur dan kode branch `master` dari `theo00000/reminder-app`, diperiksa 13 November 2026. Perubahan yang hanya ada di lokal belum tentu tercakup.
 
-First, run the development server:
+**As-Is vs To-Be:** Semua diagram dan tabel menandai implementasi aktual atau rencana. Jangan menganggap PATCH, DELETE, login, dan push notification sudah siap hanya karena tercantum sebagai rancangan.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Ringkasan
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Reminder App adalah aplikasi web pengelolaan pengingat berbasis tenggat waktu. Pengguna dapat membuat dan melihat reminder, melihat statistik status pada dashboard, serta menyimpan data ke database Turso melalui REST-style Route Handlers Next.js.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Status fitur
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Kapabilitas | Status pada branch `master` yang diperiksa | Lokasi |
+| --- | --- | --- |
+| Menambah reminder | Diimplementasikan | `ReminderForm.tsx`, `POST /api/reminders` |
+| Menampilkan reminder | Diimplementasikan | `page.tsx`, `GET /api/reminders` |
+| Statistik total / completed / overdue | Diimplementasikan di UI | `app/page.tsx` |
+| Edit / complete / delete | Rencana, belum ditemukan pada branch yang diperiksa | `/api/reminders/[id]`, `ReminderCard.tsx` |
+| Search / filter | Rencana | `ReminderList.tsx` |
+| Scheduler | Prototipe kelas tersedia; belum ada proses deployment yang memulainya | `app/services/Scheduler.ts` |
+| Browser/server push notification | Belum andal untuk production | `NotificationEngine.ts` |
+| Akun, login, isolasi data per pengguna | Belum tersedia | — |
 
-## Learn More
+## Dokumen teknis
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Arsitektur dan komponen](docs/ARCHITECTURE.md): system context, module diagram, deployment, keamanan.
+- [Database dan ERD](docs/DATABASE.md): ERD As-Is, relational schema, aturan data, relasi To-Be.
+- [Alur proses](docs/WORKFLOWS.md): DFD, sequence Create/Read, perubahan status, scheduler.
+- [Kontrak API](docs/API.md): endpoint saat ini, payload, respons, error, serta endpoint yang direncanakan.
