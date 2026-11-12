@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { ReminderForm } from "./frontend/components/ReminderForm";
-import type { Reminder, CreateReminderInput } from "./models/Reminder";
+import { ReminderList } from "./frontend/components/ReminderList";
 
-// ==============================
-// API: GET REMINDERS
-// ==============================
+import type {
+  Reminder,
+  CreateReminderInput,
+  UpdateReminderInput,
+} from "./models/Reminder";
 
 async function getReminders(signal?: AbortSignal): Promise<Reminder[]> {
   const response = await fetch("/api/reminders", {
-    method: "GET",
     cache: "no-store",
     signal,
   });
@@ -22,37 +23,42 @@ async function getReminders(signal?: AbortSignal): Promise<Reminder[]> {
   const data: unknown = await response.json();
 
   if (!Array.isArray(data)) {
-    throw new Error("Invalid API response: expected an array of reminders");
+    throw new Error("Format respons API tidak valid");
   }
 
   return data as Reminder[];
 }
+async function checkResponse(
+  response: Response,
+  fallback: string,
+): Promise<void> {
+  if (response.ok) return;
 
-// ==============================
-// DATE FORMATTER
-// ==============================
+  let message = fallback;
 
-function formatDate(date: string): string {
-  return new Date(date).toLocaleString("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  try {
+    const data: unknown = await response.json();
+
+    if (
+      data !== null &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof data.error === "string"
+    ) {
+      message = data.error;
+    }
+  } catch {}
+
+  throw new Error(`${message} (${response.status})`);
 }
-
-// ==============================
-// HOME PAGE
-// ==============================
 
 export default function Home() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [now, setNow] = useState(0);
-
-  // ==============================
-  // LOAD REMINDERS
-  // ==============================
 
   useEffect(() => {
     const controller = new AbortController();
@@ -76,7 +82,6 @@ export default function Home() {
         }
       });
 
-    // Update waktu setiap menit
     const interval = window.setInterval(() => {
       setNow(Date.now());
     }, 60_000);
@@ -87,13 +92,17 @@ export default function Home() {
     };
   }, []);
 
-  // ==============================
-  // CREATE REMINDER
-  // ==============================
+  async function refreshReminders() {
+    const data = await getReminders();
+    setReminders(data);
+    setNow(Date.now());
+  }
 
   async function handleAddReminder(input: CreateReminderInput): Promise<void> {
     setSaving(true);
     setError("");
+
+    let created = false;
 
     try {
       const response = await fetch("/api/reminders", {
@@ -104,35 +113,73 @@ export default function Home() {
         body: JSON.stringify(input),
       });
 
-      if (!response.ok) {
-        throw new Error(`Gagal menyimpan reminder (${response.status})`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menyimpan reminder");
+      await checkResponse(response, "Gagal menyimpan reminder");
 
-      throw err;
+      created = true;
+      await refreshReminders();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+
+      setError(
+        created
+          ? "Reminder tersimpan, tetapi daftar gagal diperbarui."
+          : message,
+      );
+
+      if (!created) throw err;
     } finally {
       setSaving(false);
     }
+  }
 
-    // Refresh daftar setelah berhasil disimpan
+  async function handleUpdateReminder(
+    id: number,
+    input: UpdateReminderInput,
+  ): Promise<void> {
+    setBusyId(id);
+    setError("");
+
     try {
-      const updatedReminders = await getReminders();
+      const response = await fetch(`/api/reminders/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
+      });
 
-      setReminders(updatedReminders);
-      setNow(Date.now());
-    } catch {
-      setError(
-        "Reminder tersimpan, tetapi daftar gagal diperbarui. Refresh halaman untuk melihat data terbaru.",
-      );
+      await checkResponse(response, "Gagal memperbarui reminder");
+
+      await refreshReminders();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+
+      throw err;
+    } finally {
+      setBusyId(null);
     }
   }
 
-  // ==============================
-  // STATISTICS
-  // ==============================
+  async function handleDeleteReminder(id: number): Promise<void> {
+    setBusyId(id);
+    setError("");
 
-  const total = reminders.length;
+    try {
+      const response = await fetch(`/api/reminders/${id}`, {
+        method: "DELETE",
+      });
+
+      await checkResponse(response, "Gagal menghapus reminder");
+
+      await refreshReminders();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+
+      throw err;
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const completed = reminders.filter((reminder) => reminder.isCompleted).length;
 
@@ -143,28 +190,21 @@ export default function Home() {
       new Date(reminder.dueAt).getTime() < now,
   ).length;
 
-  // ==============================
-  // UI
-  // ==============================
-
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl space-y-8">
-        {/* HEADER */}
         <header>
           <h1 className="text-3xl font-bold tracking-tight">Reminder App</h1>
-
           <p className="mt-2 text-slate-500">
             Manage your tasks and never miss a deadline.
           </p>
         </header>
 
-        {/* STATISTICS */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {[
             {
               label: "Total Reminders",
-              value: total,
+              value: reminders.length,
             },
             {
               label: "Completed",
@@ -180,20 +220,17 @@ export default function Home() {
               className="rounded-xl border border-slate-200 bg-white p-5"
             >
               <p className="text-sm text-slate-500">{stat.label}</p>
-
               <p className="mt-2 text-3xl font-semibold">{stat.value}</p>
             </div>
           ))}
         </section>
 
-        {/* CREATE REMINDER */}
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="mb-5 text-xl font-semibold">Create Reminder</h2>
 
           <ReminderForm onAddReminder={handleAddReminder} saving={saving} />
         </section>
 
-        {/* ERROR */}
         {error && (
           <div
             role="alert"
@@ -203,75 +240,17 @@ export default function Home() {
           </div>
         )}
 
-        {/* REMINDER LIST */}
-        <section>
-          <h2 className="mb-5 text-xl font-semibold">Your Reminders</h2>
-
-          {loading ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-              <p className="text-slate-500">Loading reminders...</p>
-            </div>
-          ) : reminders.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-              <p className="font-medium">No reminders yet</p>
-
-              <p className="mt-2 text-sm text-slate-500">
-                Create your first reminder above.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {reminders.map((reminder) => {
-                const isOverdue =
-                  !reminder.isCompleted &&
-                  now > 0 &&
-                  new Date(reminder.dueAt).getTime() < now;
-
-                return (
-                  <article
-                    key={reminder.id}
-                    className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md"
-                  >
-                    {/* CARD HEADER */}
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="font-semibold">{reminder.title}</h3>
-
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          reminder.isCompleted
-                            ? "bg-green-100 text-green-700"
-                            : isOverdue
-                              ? "bg-red-100 text-red-700"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {reminder.isCompleted
-                          ? "Completed"
-                          : isOverdue
-                            ? "Overdue"
-                            : "Pending"}
-                      </span>
-                    </div>
-
-                    {/* DESCRIPTION */}
-                    {reminder.description && (
-                      <p className="mt-3 text-sm text-slate-600">
-                        {reminder.description}
-                      </p>
-                    )}
-
-                    {/* DUE DATE */}
-                    <div className="mt-4 border-t border-slate-100 pt-4">
-                      <p className="text-sm text-slate-500">
-                        Due: {formatDate(reminder.dueAt)}
-                      </p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        {loading ? (
+          <p className="text-slate-500">Loading reminders...</p>
+        ) : (
+          <ReminderList
+            reminders={reminders}
+            now={now}
+            busyId={busyId}
+            onUpdate={handleUpdateReminder}
+            onDelete={handleDeleteReminder}
+          />
+        )}
       </div>
     </main>
   );
