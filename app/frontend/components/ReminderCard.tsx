@@ -166,7 +166,7 @@ export function ReminderCard({
               />
 
               <span
-                className={`break-words font-semibold ${
+                className={`break-word font-semibold ${
                   reminder.isCompleted
                     ? "text-slate-400 line-through"
                     : "text-slate-900"
